@@ -7,6 +7,7 @@ import {
   withInvalidate,
 } from '@/react-tools/react-query';
 import { getServices } from '@/react/kubernetes/networks/services/service';
+import { getFulfilledResults } from '@/portainer/helpers/promise-utils';
 
 import {
   getIngresses,
@@ -69,9 +70,8 @@ export function useIngresses(
       const settledIngressesPromise = await Promise.allSettled(
         namespaces.map((namespace) => getIngresses(environmentId, namespace))
       );
-      const ingresses = settledIngressesPromise
-        .filter(isFulfilled)
-        ?.map((i) => i.value);
+      const ingresses = getFulfilledResults(settledIngressesPromise);
+
       // flatten the array and remove empty ingresses
       const filteredIngresses = ingresses.flat().filter((ing) => ing);
 
@@ -82,10 +82,7 @@ export function useIngresses(
       const settledServicesPromise = await Promise.allSettled(
         uniqueNamespacesWithIngress.map((ns) => getServices(environmentId, ns))
       );
-      const services = settledServicesPromise
-        .filter(isFulfilled)
-        ?.map((s) => s.value)
-        .flat();
+      const services = getFulfilledResults(settledServicesPromise).flat();
 
       // check if each ingress path service has a service that still exists
       filteredIngresses.forEach((ing, iIndex) => {
@@ -192,10 +189,4 @@ export function useIngressControllers(
       ...withError('Unable to get ingress controllers'),
     }
   );
-}
-
-function isFulfilled<T>(
-  input: PromiseSettledResult<T>
-): input is PromiseFulfilledResult<T> {
-  return input.status === 'fulfilled';
 }

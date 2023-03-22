@@ -4,6 +4,7 @@ import { compact } from 'lodash';
 import { withError } from '@/react-tools/react-query';
 import axios, { parseAxiosError } from '@/portainer/services/axios';
 import { EnvironmentId } from '@/react/portainer/environments/types';
+import { getFulfilledResults } from '@/portainer/helpers/promise-utils';
 
 import { getNamespaces } from '../namespaces/service';
 
@@ -42,18 +43,10 @@ export function useServices(environmentId: EnvironmentId) {
           getServices(environmentId, namespace, true)
         )
       );
-      return compact(
-        settledServicesPromise.filter(isFulfilled).flatMap((i) => i.value)
-      );
+      return compact(getFulfilledResults(settledServicesPromise).flat());
     },
     withError('Unable to get services.')
   );
-}
-
-function isFulfilled<T>(
-  input: PromiseSettledResult<T>
-): input is PromiseFulfilledResult<T> {
-  return input.status === 'fulfilled';
 }
 
 export function useMutationDeleteServices(environmentId: EnvironmentId) {
