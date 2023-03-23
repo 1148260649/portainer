@@ -4,6 +4,12 @@ import { EnvironmentId } from '@/react/portainer/environments/types';
 import axios, { parseAxiosError } from '@/portainer/services/axios';
 import { promiseSequence } from '@/portainer/helpers/promise-utils';
 import { useIntegratedLicenseInfo } from '@/react/portainer/licenses/use-license.service';
+import {
+  mutationOptions,
+  withInvalidate,
+  withError,
+} from '@/react-tools/react-query';
+import { queryKeys } from '@/react/portainer/environments/queries/query-keys';
 
 export function useAssociateDeviceMutation() {
   const queryClient = useQueryClient();
@@ -11,17 +17,10 @@ export function useAssociateDeviceMutation() {
   return useMutation(
     (ids: EnvironmentId[]) =>
       promiseSequence(ids.map((id) => () => associateDevice(id))),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['environments']);
-      },
-      meta: {
-        error: {
-          title: 'Failure',
-          message: 'Failed to associate devices',
-        },
-      },
-    }
+    mutationOptions(
+      withInvalidate(queryClient, [queryKeys.base()]),
+      withError('Failed to associate devices')
+    )
   );
 }
 
