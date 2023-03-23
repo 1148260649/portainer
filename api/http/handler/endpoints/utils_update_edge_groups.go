@@ -31,7 +31,7 @@ func (handler *Handler) updateEnvironmentEdgeGroups(newEdgeGroups []portainer.Ed
 		return false, nil
 	}
 
-	removeEdgeGroups := set.Difference(environmentEdgeGroupsSet, newEdgeGroupsSet)
+	removeEdgeGroups := environmentEdgeGroupsSet.Difference(newEdgeGroupsSet)
 	for edgeGroupID := range removeEdgeGroups {
 		err := handler.DataStore.EdgeGroup().UpdateEdgeGroupFunc(edgeGroupID, func(edgeGroup *portainer.EdgeGroup) {
 			edgeGroup.Endpoints = slices.RemoveItem(edgeGroup.Endpoints, func(eID portainer.EndpointID) bool {
@@ -48,7 +48,7 @@ func (handler *Handler) updateEnvironmentEdgeGroups(newEdgeGroups []portainer.Ed
 		}
 	}
 
-	addToEdgeGroups := set.Difference(newEdgeGroupsSet, environmentEdgeGroupsSet)
+	addToEdgeGroups := newEdgeGroupsSet.Difference(environmentEdgeGroupsSet)
 	for edgeGroupID := range addToEdgeGroups {
 		err := handler.DataStore.EdgeGroup().UpdateEdgeGroupFunc(edgeGroupID, func(edgeGroup *portainer.EdgeGroup) {
 			edgeGroup.Endpoints = append(edgeGroup.Endpoints, environmentID)

@@ -17,7 +17,7 @@ func (handler *Handler) updateEnvironmentTags(newTags []portainer.TagID, oldTags
 		return false, nil
 	}
 
-	removeTags := set.Difference(environmentTagSet, payloadTagSet)
+	removeTags := environmentTagSet.Difference(payloadTagSet)
 
 	for tagID := range removeTags {
 		err := handler.DataStore.Tag().UpdateTagFunc(tagID, func(tag *portainer.Tag) {
@@ -31,7 +31,7 @@ func (handler *Handler) updateEnvironmentTags(newTags []portainer.TagID, oldTags
 		}
 	}
 
-	addTags := set.Difference(payloadTagSet, environmentTagSet)
+	addTags := payloadTagSet.Difference(environmentTagSet)
 	for tagID := range addTags {
 		err := handler.DataStore.Tag().UpdateTagFunc(tagID, func(tag *portainer.Tag) {
 			tag.Endpoints[environmentID] = true

@@ -6,27 +6,33 @@ type SetKey interface {
 
 type Set[T SetKey] map[T]bool
 
+// Add adds a key to the set.
 func (s Set[T]) Add(key T) {
 	s[key] = true
 }
 
+// Contains returns true if the set contains the key.
 func (s Set[T]) Contains(key T) bool {
 	_, ok := s[key]
 	return ok
 }
 
+// Remove removes a key from the set.
 func (s Set[T]) Remove(key T) {
 	delete(s, key)
 }
 
+// Len returns the number of keys in the set.
 func (s Set[T]) Len() int {
 	return len(s)
 }
 
+// IsEmpty returns true if the set is empty.
 func (s Set[T]) IsEmpty() bool {
 	return len(s) == 0
 }
 
+// Clear removes all keys from the set.
 func (s Set[T]) Keys() []T {
 	keys := make([]T, s.Len())
 
@@ -39,6 +45,7 @@ func (s Set[T]) Keys() []T {
 	return keys
 }
 
+// Clear removes all keys from the set.
 func (s Set[T]) Copy() Set[T] {
 	copy := make(Set[T])
 
@@ -49,6 +56,19 @@ func (s Set[T]) Copy() Set[T] {
 	return copy
 }
 
+// Difference returns a new set containing the keys that are in the first set but not in the second set.
+func (set Set[T]) Difference(second Set[T]) Set[T] {
+
+	difference := set.Copy()
+
+	for key := range second {
+		difference.Remove(key)
+	}
+
+	return difference
+}
+
+// Union returns a new set containing the keys that are in either set.
 func Union[T SetKey](sets ...Set[T]) Set[T] {
 	union := make(Set[T])
 
@@ -61,6 +81,7 @@ func Union[T SetKey](sets ...Set[T]) Set[T] {
 	return union
 }
 
+// Intersection returns a new set containing the keys that are in all sets.
 func Intersection[T SetKey](sets ...Set[T]) Set[T] {
 	if len(sets) == 0 {
 		return make(Set[T])
@@ -79,22 +100,7 @@ func Intersection[T SetKey](sets ...Set[T]) Set[T] {
 	return intersection
 }
 
-func Difference[T SetKey](sets ...Set[T]) Set[T] {
-	if len(sets) == 0 {
-		return make(Set[T])
-	}
-
-	difference := sets[0].Copy()
-
-	for _, set := range sets[1:] {
-		for key := range set {
-			difference.Remove(key)
-		}
-	}
-
-	return difference
-}
-
+// ToSet returns a new set containing the keys.
 func ToSet[T SetKey](keys []T) Set[T] {
 	set := make(Set[T])
 	for _, key := range keys {
