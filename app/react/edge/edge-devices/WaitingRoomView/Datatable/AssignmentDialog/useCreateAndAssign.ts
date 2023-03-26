@@ -15,16 +15,16 @@ import { createEdgeGroup } from '@/react/edge/edge-groups/queries/useCreateEdgeG
 import { createGroup } from '@/react/portainer/environments/environment-groups/queries/useCreateGroupMutation';
 import {
   EnvironmentRelationsPayload,
-  updateEnvironmentRelations,
-} from '@/react/portainer/environments/queries/useUpdateEnvironmentRelationsMutation';
+  useUpdateEnvironmentsRelationsMutation,
+} from '@/react/portainer/environments/queries/useUpdateEnvironmentsRelationsMutation';
 import { TagId } from '@/portainer/tags/types';
 import { EdgeGroup } from '@/react/edge/edge-groups/types';
 import { EnvironmentGroupId } from '@/react/portainer/environments/environment-groups/types';
 
 import { WaitingRoomEnvironment } from '../../types';
 
-import { confirmCreation } from './confirmCreate';
 import { FormValues } from './types';
+import { confirmCreation } from './confirmCreate';
 import { isAssignedToGroup } from './utils';
 
 export function useCreateAndAssign(
@@ -32,7 +32,7 @@ export function useCreateAndAssign(
   onSuccess: () => void
 ) {
   const createMetaMutation = useCreateMetaMutation();
-  const assignRelationsMutation = useAssignRelationsMutation();
+  const assignRelationsMutation = useUpdateEnvironmentsRelationsMutation();
 
   return {
     onSubmit,
@@ -56,12 +56,48 @@ export function useCreateAndAssign(
       group: isNumber(values.group) ? values.group : created.group,
     };
 
-    assignRelationsMutation.mutate(
-      { environments, assign, values },
+    assignRelations({ assign, environments, values });
+  }
+
+  function assignRelations({
+    assign,
+    environments,
+    values,
+  }: {
+    environments: WaitingRoomEnvironment[];
+    values: FormValues;
+    assign: {
+      tags: TagId[];
+      edgeGroups: Array<EdgeGroup['Id']>;
+      group?: EnvironmentGroupId;
+    };
+  }) {
+    return assignRelationsMutation.mutate(
+      Object.fromEntries(environments.map(createPayload)),
       {
         onSuccess,
       }
     );
+
+    function createPayload(environment: WaitingRoomEnvironment) {
+      const relations: Partial<EnvironmentRelationsPayload> = {};
+      if (environment.TagIds.length === 0 || values.overrideTags) {
+        relations.tags = assign.tags;
+      }
+
+      if (environment.EdgeGroups.length === 0 || values.overrideEdgeGroups) {
+        relations.edgeGroups = assign.edgeGroups;
+      }
+
+      if (
+        (!isAssignedToGroup(environment) || values.overrideGroup) &&
+        assign.group
+      ) {
+        relations.group = assign.group;
+      }
+
+      return [environment.Id, relations];
+    }
   }
 
   async function createIfNeeded(payload: {
@@ -140,63 +176,4 @@ async function createMeta({
         })
       : undefined,
   };
-}
-
-function useAssignRelationsMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation(
-    assignRelations,
-    mutationOptions(
-      withInvalidate(queryClient, [
-        edgeGroupQueryKeys.base(),
-        groupQueryKeys.base(),
-        tagKeys.all,
-      ]),
-      withError('Failed to create groups and tags')
-    )
-  );
-}
-
-function assignRelations({
-  assign,
-  environments,
-  values,
-}: {
-  environments: WaitingRoomEnvironment[];
-  values: FormValues;
-  assign: {
-    tags: TagId[];
-    edgeGroups: Array<EdgeGroup['Id']>;
-    group?: EnvironmentGroupId;
-  };
-}) {
-  return Promise.all(
-    environments.map(createPayload).map(({ payload, id }) =>
-      updateEnvironmentRelations({
-        id,
-        relations: payload,
-      })
-    )
-  );
-
-  function createPayload(environment: WaitingRoomEnvironment) {
-    const payload: Partial<EnvironmentRelationsPayload> = {};
-    if (environment.TagIds.length === 0 || values.overrideTags) {
-      payload.tags = assign.tags;
-    }
-
-    if (environment.EdgeGroups.length === 0 || values.overrideEdgeGroups) {
-      payload.edgeGroups = assign.edgeGroups;
-    }
-
-    if (
-      (!isAssignedToGroup(environment) || values.overrideGroup) &&
-      assign.group
-    ) {
-      payload.group = assign.group;
-    }
-
-    return { id: environment.Id, payload };
-  }
 }

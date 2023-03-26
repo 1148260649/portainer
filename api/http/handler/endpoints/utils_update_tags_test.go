@@ -4,40 +4,23 @@ import (
 	"testing"
 
 	portainer "github.com/portainer/portainer/api"
+	"github.com/portainer/portainer/api/dataservices"
 	"github.com/portainer/portainer/api/datastore"
-	"github.com/portainer/portainer/api/internal/snapshot"
-	"github.com/portainer/portainer/api/internal/testhelpers"
 	"github.com/stretchr/testify/assert"
 )
 
-func setupUpdateTagsHandler(t *testing.T) (handler *Handler, teardown func()) {
-	_, store, teardown := datastore.MustNewTestStore(t, true, true)
-
-	bouncer := testhelpers.NewTestRequestBouncer()
-	handler = NewHandler(bouncer, nil)
-	handler.DataStore = store
-	handler.ComposeStackManager = testhelpers.NewComposeStackManager()
-
-	handler.SnapshotService, _ = snapshot.NewService("1s", store, nil, nil, nil)
-
-	return handler, teardown
-}
-
 func Test_updateTags(t *testing.T) {
 
-	createTags := func(handler *Handler, tagNames []string, endpointIDs []portainer.EndpointID) ([]portainer.Tag, error) {
+	createTags := func(store *datastore.Store, tagNames []string) ([]portainer.Tag, error) {
 		tags := make([]portainer.Tag, len(tagNames))
-		for index, tag := range tagNames {
+		for index, tagName := range tagNames {
 			tag := &portainer.Tag{
-				Name:           tag,
+				Name:           tagName,
 				Endpoints:      make(map[portainer.EndpointID]bool),
 				EndpointGroups: make(map[portainer.EndpointGroupID]bool),
 			}
-			for _, endpointID := range endpointIDs {
-				tag.Endpoints[endpointID] = true
-			}
 
-			err := handler.DataStore.Tag().Create(tag)
+			err := store.Tag().Create(tag)
 			if err != nil {
 				return nil, err
 			}
@@ -48,9 +31,9 @@ func Test_updateTags(t *testing.T) {
 		return tags, nil
 	}
 
-	checkTags := func(handler *Handler, is *assert.Assertions, tagIDs []portainer.TagID, endpointID portainer.EndpointID) {
+	checkTags := func(store *datastore.Store, is *assert.Assertions, tagIDs []portainer.TagID, endpointID portainer.EndpointID) {
 		for _, tagID := range tagIDs {
-			tag, err := handler.DataStore.Tag().Tag(tagID)
+			tag, err := store.Tag().Tag(tagID)
 			is.NoError(err)
 
 			_, ok := tag.Endpoints[endpointID]
@@ -93,26 +76,26 @@ func Test_updateTags(t *testing.T) {
 	testFn := func(t *testing.T, testCase testCase) {
 
 		is := assert.New(t)
-		handler, teardown := setupUpdateTagsHandler(t)
+		_, store, teardown := datastore.MustNewTestStore(t, true, true)
 		defer teardown()
 
-		err := handler.DataStore.Endpoint().Create(testCase.endpoint)
+		err := store.Endpoint().Create(testCase.endpoint)
 		is.NoError(err)
 
-		tags, err := createTags(handler, testCase.tagNames, nil)
+		tags, err := createTags(store, testCase.tagNames)
 		is.NoError(err)
 
 		endpointTags := tagsByName(tags, testCase.endpointTagNames)
 		for _, tag := range endpointTags {
 			tag.Endpoints[testCase.endpoint.ID] = true
 
-			err = handler.DataStore.Tag().UpdateTag(tag.ID, &tag)
+			err = store.Tag().UpdateTag(tag.ID, &tag)
 			is.NoError(err)
 		}
 
 		endpointTagIDs := getIDs(endpointTags)
 		testCase.endpoint.TagIDs = endpointTagIDs
-		err = handler.DataStore.Endpoint().UpdateEndpoint(testCase.endpoint.ID, testCase.endpoint)
+		err = store.Endpoint().UpdateEndpoint(testCase.endpoint.ID, testCase.endpoint)
 		is.NoError(err)
 
 		expectedTags := tagsByName(tags, testCase.tagsToApply)
@@ -121,12 +104,18 @@ func Test_updateTags(t *testing.T) {
 			expectedTagIDs[i] = tag.ID
 		}
 
-		updated, err := handler.updateEnvironmentTags(expectedTagIDs, testCase.endpoint.TagIDs, testCase.endpoint.ID)
+		err = store.UpdateTx(func(tx dataservices.DataStoreTx) error {
+			updated, err := updateEnvironmentTags(tx, expectedTagIDs, testCase.endpoint.TagIDs, testCase.endpoint.ID)
+			is.NoError(err)
+
+			is.Equal(testCase.shouldNotBeUpdated, !updated)
+
+			return nil
+		})
+
 		is.NoError(err)
 
-		is.Equal(testCase.shouldNotBeUpdated, !updated)
-
-		checkTags(handler, is, expectedTagIDs, testCase.endpoint.ID)
+		checkTags(store, is, expectedTagIDs, testCase.endpoint.ID)
 	}
 
 	testCases := []testCase{

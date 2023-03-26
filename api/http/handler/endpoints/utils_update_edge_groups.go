@@ -3,12 +3,13 @@ package endpoints
 import (
 	"github.com/pkg/errors"
 	portainer "github.com/portainer/portainer/api"
+	"github.com/portainer/portainer/api/dataservices"
 	"github.com/portainer/portainer/api/internal/set"
 	"github.com/portainer/portainer/api/internal/slices"
 )
 
-func (handler *Handler) updateEnvironmentEdgeGroups(newEdgeGroups []portainer.EdgeGroupID, environmentID portainer.EndpointID) (bool, error) {
-	edgeGroups, err := handler.DataStore.EdgeGroup().EdgeGroups()
+func updateEnvironmentEdgeGroups(tx dataservices.DataStoreTx, newEdgeGroups []portainer.EdgeGroupID, environmentID portainer.EndpointID) (bool, error) {
+	edgeGroups, err := tx.EdgeGroup().EdgeGroups()
 	if err != nil {
 		return false, errors.WithMessage(err, "Unable to retrieve edge groups from the database")
 	}
@@ -31,35 +32,39 @@ func (handler *Handler) updateEnvironmentEdgeGroups(newEdgeGroups []portainer.Ed
 		return false, nil
 	}
 
+	update := func(groupID portainer.EdgeGroupID, update func(*portainer.EdgeGroup)) error {
+		group, err := tx.EdgeGroup().EdgeGroup(groupID)
+		if err != nil {
+			return errors.WithMessage(err, "Unable to find a tag inside the database")
+		}
+
+		update(group)
+
+		return tx.EdgeGroup().UpdateEdgeGroup(groupID, group)
+	}
+
 	removeEdgeGroups := environmentEdgeGroupsSet.Difference(newEdgeGroupsSet)
 	for edgeGroupID := range removeEdgeGroups {
-		err := handler.DataStore.EdgeGroup().UpdateEdgeGroupFunc(edgeGroupID, func(edgeGroup *portainer.EdgeGroup) {
+		err := update(edgeGroupID, func(edgeGroup *portainer.EdgeGroup) {
 			edgeGroup.Endpoints = slices.RemoveItem(edgeGroup.Endpoints, func(eID portainer.EndpointID) bool {
 				return eID == environmentID
 			})
 		})
 
-		if handler.DataStore.IsErrObjectNotFound(err) {
-			return false, errors.WithMessage(err, "Unable to find environment group inside the database")
+		if err != nil {
+			return false, errors.WithMessage(err, "Unable to persist Edge group changes inside the database")
 		}
 
-		if err != nil {
-			return false, errors.WithMessage(err, "Unable to update environment group inside the database")
-		}
 	}
 
 	addToEdgeGroups := newEdgeGroupsSet.Difference(environmentEdgeGroupsSet)
 	for edgeGroupID := range addToEdgeGroups {
-		err := handler.DataStore.EdgeGroup().UpdateEdgeGroupFunc(edgeGroupID, func(edgeGroup *portainer.EdgeGroup) {
+		err := update(edgeGroupID, func(edgeGroup *portainer.EdgeGroup) {
 			edgeGroup.Endpoints = append(edgeGroup.Endpoints, environmentID)
 		})
 
-		if handler.DataStore.IsErrObjectNotFound(err) {
-			return false, errors.WithMessage(err, "Unable to find environment group inside the database")
-		}
-
 		if err != nil {
-			return false, errors.WithMessage(err, "Unable to update environment group inside the database")
+			return false, errors.WithMessage(err, "Unable to persist Edge group changes inside the database")
 		}
 	}
 
