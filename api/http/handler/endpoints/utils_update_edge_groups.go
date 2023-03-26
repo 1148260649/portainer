@@ -32,40 +32,40 @@ func updateEnvironmentEdgeGroups(tx dataservices.DataStoreTx, newEdgeGroups []po
 		return false, nil
 	}
 
-	update := func(groupID portainer.EdgeGroupID, update func(*portainer.EdgeGroup)) error {
-		group, err := tx.EdgeGroup().EdgeGroup(groupID)
-		if err != nil {
-			return errors.WithMessage(err, "Unable to find a tag inside the database")
+	updateSet := func(groupIDs set.Set[portainer.EdgeGroupID], updateItem func(*portainer.EdgeGroup)) error {
+		for groupID := range groupIDs {
+			group, err := tx.EdgeGroup().EdgeGroup(groupID)
+			if err != nil {
+				return errors.WithMessage(err, "Unable to find a Edge group inside the database")
+			}
+
+			updateItem(group)
+
+			err = tx.EdgeGroup().UpdateEdgeGroup(groupID, group)
+			if err != nil {
+				return errors.WithMessage(err, "Unable to persist Edge group changes inside the database")
+			}
 		}
 
-		update(group)
-
-		return tx.EdgeGroup().UpdateEdgeGroup(groupID, group)
+		return nil
 	}
 
 	removeEdgeGroups := environmentEdgeGroupsSet.Difference(newEdgeGroupsSet)
-	for edgeGroupID := range removeEdgeGroups {
-		err := update(edgeGroupID, func(edgeGroup *portainer.EdgeGroup) {
-			edgeGroup.Endpoints = slices.RemoveItem(edgeGroup.Endpoints, func(eID portainer.EndpointID) bool {
-				return eID == environmentID
-			})
+	err = updateSet(removeEdgeGroups, func(edgeGroup *portainer.EdgeGroup) {
+		edgeGroup.Endpoints = slices.RemoveItem(edgeGroup.Endpoints, func(eID portainer.EndpointID) bool {
+			return eID == environmentID
 		})
-
-		if err != nil {
-			return false, errors.WithMessage(err, "Unable to persist Edge group changes inside the database")
-		}
-
+	})
+	if err != nil {
+		return false, err
 	}
 
 	addToEdgeGroups := newEdgeGroupsSet.Difference(environmentEdgeGroupsSet)
-	for edgeGroupID := range addToEdgeGroups {
-		err := update(edgeGroupID, func(edgeGroup *portainer.EdgeGroup) {
-			edgeGroup.Endpoints = append(edgeGroup.Endpoints, environmentID)
-		})
-
-		if err != nil {
-			return false, errors.WithMessage(err, "Unable to persist Edge group changes inside the database")
-		}
+	err = updateSet(addToEdgeGroups, func(edgeGroup *portainer.EdgeGroup) {
+		edgeGroup.Endpoints = append(edgeGroup.Endpoints, environmentID)
+	})
+	if err != nil {
+		return false, err
 	}
 
 	return true, nil

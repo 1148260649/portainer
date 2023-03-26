@@ -18,38 +18,38 @@ func updateEnvironmentTags(tx dataservices.DataStoreTx, newTags []portainer.TagI
 		return false, nil
 	}
 
-	removeTags := environmentTagSet.Difference(payloadTagSet)
+	updateSet := func(tagIDs set.Set[portainer.TagID], updateItem func(*portainer.Tag)) error {
+		for tagID := range tagIDs {
+			tag, err := tx.Tag().Tag(tagID)
+			if err != nil {
+				return errors.WithMessage(err, "Unable to find a tag inside the database")
+			}
 
-	update := func(tagID portainer.TagID, update func(*portainer.Tag)) error {
-		tag, err := tx.Tag().Tag(tagID)
-		if err != nil {
-			return errors.WithMessage(err, "Unable to find a tag inside the database")
+			updateItem(tag)
+
+			err = tx.Tag().UpdateTag(tagID, tag)
+			if err != nil {
+				return errors.WithMessage(err, "Unable to persist tag changes inside the database")
+			}
 		}
 
-		update(tag)
-
-		return tx.Tag().UpdateTag(tagID, tag)
+		return nil
 	}
 
-	for tagID := range removeTags {
-		err := update(tagID, func(tag *portainer.Tag) {
-			delete(tag.Endpoints, environmentID)
-		})
-
-		if err != nil {
-			return false, errors.WithMessage(err, "Unable to persist tag changes inside the database")
-		}
+	removeTags := environmentTagSet.Difference(payloadTagSet)
+	err := updateSet(removeTags, func(tag *portainer.Tag) {
+		delete(tag.Endpoints, environmentID)
+	})
+	if err != nil {
+		return false, err
 	}
 
 	addTags := payloadTagSet.Difference(environmentTagSet)
-	for tagID := range addTags {
-		err := update(tagID, func(tag *portainer.Tag) {
-			tag.Endpoints[environmentID] = true
-		})
-
-		if err != nil {
-			return false, errors.WithMessage(err, "Unable to persist tag changes inside the database")
-		}
+	err = updateSet(addTags, func(tag *portainer.Tag) {
+		tag.Endpoints[environmentID] = true
+	})
+	if err != nil {
+		return false, err
 	}
 
 	return true, nil
