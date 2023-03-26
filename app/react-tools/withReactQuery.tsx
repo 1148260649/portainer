@@ -4,7 +4,7 @@ import { QueryClientProvider } from 'react-query';
 import { queryClient as defaultQueryClient } from './react-query';
 
 export function withReactQuery<T>(
-  WrappedComponent: ComponentType<T>,
+  WrappedComponent: ComponentType<T & JSX.IntrinsicAttributes>,
   queryClient = defaultQueryClient
 ): ComponentType<T> {
   // Try to create a nice displayName for React Dev Tools.
