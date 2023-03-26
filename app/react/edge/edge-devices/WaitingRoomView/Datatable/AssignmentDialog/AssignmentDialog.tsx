@@ -43,11 +43,7 @@ export function AssignmentDialog({
   const hasPreAssignedGroup = environments.some((e) => isAssignedToGroup(e));
 
   return (
-    <Modal
-      aria-label="Associate and assignment"
-      onDismiss={() => onSubmit()}
-      size="lg"
-    >
+    <Modal aria-label="Associate and assignment" onDismiss={() => onSubmit()}>
       <Modal.Header
         title={`Associate with assignment (${addPlural(
           environments.length,
@@ -58,7 +54,7 @@ export function AssignmentDialog({
         {({ values, setFieldValue, errors }) => (
           <Form noValidate>
             <Modal.Body>
-              <div className="form-horizontal">
+              <div>
                 <FormControl
                   size="vertical"
                   label="Group"
@@ -105,13 +101,11 @@ export function AssignmentDialog({
                   )}
                 </FormControl>
 
-                <div className="form-group">
-                  <div className="col-sm-12">
-                    <TextTip color="blue">
-                      Edge group(s) created here are static only, use tags to
-                      assign to dynamic edge groups
-                    </TextTip>
-                  </div>
+                <div className="mb-3">
+                  <TextTip color="blue">
+                    Edge group(s) created here are static only, use tags to
+                    assign to dynamic edge groups
+                  </TextTip>
                 </div>
 
                 <FormControl
