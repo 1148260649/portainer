@@ -11,7 +11,7 @@ interface Creds {
 
 export function useCheckRepo(
   url: string,
-  creds: Creds,
+  creds: Creds | undefined,
   force: boolean,
   {
     enabled,
@@ -31,7 +31,7 @@ export function useCheckRepo(
 
 export async function checkRepo(
   repository: string,
-  creds: Creds,
+  creds: Creds | undefined,
   force: boolean
 ): Promise<boolean> {
   try {
@@ -47,7 +47,9 @@ export async function checkRepo(
 
       // If no credentials were provided alter error from git to indicate repository is not found or is private
       if (
-        !(creds.username && creds.password) &&
+        (!creds ||
+          !(creds.username && creds.password) ||
+          !creds.gitCredentialId) &&
         details ===
           'Authentication failed, please ensure that the git credentials are correct.'
       ) {
